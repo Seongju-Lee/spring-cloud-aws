@@ -148,8 +148,8 @@ public class SnsTemplate extends AbstractMessageSendingTemplate<TopicMessageChan
 	}
 
 	@Override
-	public void sendNotification(String topic, SnsNotification<?> notification) {
-		this.convertAndSend(topic, notification.getPayload(), notification.getHeaders());
+	public void sendNotification(String topicArn, SnsNotification<?> notification) {
+		this.convertAndSend(topicArn, notification.getPayload(), notification.getHeaders());
 	}
 
 	private TopicMessageChannel resolveMessageChannelByTopicName(String topicName) {
