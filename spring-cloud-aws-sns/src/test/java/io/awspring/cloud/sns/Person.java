@@ -15,14 +15,26 @@
  */
 package io.awspring.cloud.sns;
 
+import io.awspring.cloud.sns.core.SnsHeaders;
+import io.awspring.cloud.sns.core.SnsNotificationRequest;
+import java.util.Map;
+import software.amazon.awssdk.services.sns.endpoints.internal.Value.Str;
+
 public class Person {
 	private String name;
+	private SnsNotificationRequest notificationRequest;
+
 
 	public Person() {
 	}
 
 	public Person(String name) {
 		this.name = name;
+	}
+
+	public Person(String name, SnsNotificationRequest notificationRequest) {
+		this.name = name;
+		this.notificationRequest = notificationRequest;
 	}
 
 	public String getName() {

@@ -69,6 +69,7 @@ public class TopicMessageChannel extends AbstractMessageChannel {
 
 	@Override
 	protected boolean sendInternal(Message<?> message, long timeout) {
+		//* 여기서 fifo의 message group id와 message deduplication id를 매핑한다. *//
 		PublishRequest.Builder publishRequestBuilder = PublishRequest.builder();
 		publishRequestBuilder.topicArn(this.topicArn.toString()).message(message.getPayload().toString())
 				.subject(findNotificationSubject(message));
@@ -77,6 +78,7 @@ public class TopicMessageChannel extends AbstractMessageChannel {
 		if (!messageAttributes.isEmpty()) {
 			publishRequestBuilder.messageAttributes(messageAttributes);
 		}
+
 		Optional.ofNullable(message.getHeaders().get(MESSAGE_GROUP_ID_HEADER, String.class))
 				.ifPresent(publishRequestBuilder::messageGroupId);
 		Optional.ofNullable(message.getHeaders().get(MESSAGE_DEDUPLICATION_ID_HEADER, String.class))

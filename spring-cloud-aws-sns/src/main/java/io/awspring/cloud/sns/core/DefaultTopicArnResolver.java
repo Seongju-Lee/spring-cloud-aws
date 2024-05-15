@@ -16,10 +16,13 @@
 package io.awspring.cloud.sns.core;
 
 import java.util.Map;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.util.Assert;
 import software.amazon.awssdk.arns.Arn;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
+import software.amazon.awssdk.services.sns.model.CreateTopicResponse;
 
 /**
  * Default implementation of {@link TopicArnResolver} used to determine topic ARN by name.
@@ -29,6 +32,7 @@ import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
 public class DefaultTopicArnResolver implements TopicArnResolver {
 
 	private final SnsClient snsClient;
+	private static Log LOG = LogFactory.getLog(DefaultTopicArnResolver.class);
 
 	public DefaultTopicArnResolver(SnsClient snsClient) {
 		Assert.notNull(snsClient, "snsClient is required");
@@ -42,20 +46,28 @@ public class DefaultTopicArnResolver implements TopicArnResolver {
 	@Override
 	public Arn resolveTopicArn(String topicName) {
 		Assert.notNull(topicName, "topicName must not be null");
-		if (topicName.toLowerCase().startsWith("arn:")) {
-			return Arn.fromString(topicName);
-		}
-		else {
-			CreateTopicRequest.Builder builder = CreateTopicRequest.builder().name(topicName);
 
-			// fix for https://github.com/awspring/spring-cloud-aws/issues/707
+		if (topicName.toLowerCase().startsWith("arn:")) {
+			int lastColonIndex = topicName.lastIndexOf(':');
+			CreateTopicRequest.Builder builder = CreateTopicRequest.builder().name(topicName.substring(lastColonIndex + 1));
 			if (topicName.endsWith(".fifo")) {
 				builder.attributes(Map.of("FifoTopic", "true"));
 			}
 
-			// if topic exists, createTopic returns successful response with topic arn
-			return Arn.fromString(this.snsClient.createTopic(builder.build()).topicArn());
+			CreateTopicResponse response = this.snsClient.createTopic(builder.build());
+			return Arn.fromString(response.topicArn());
+//			return Arn.fromString(topicName);
 		}
+
+		CreateTopicRequest.Builder builder = CreateTopicRequest.builder().name(topicName);
+		// fix for https://github.com/awspring/spring-cloud-aws/issues/707
+		if (topicName.endsWith(".fifo")) {
+			builder.attributes(Map.of("FifoTopic", "true"));
+		}
+
+		// if topic exists, createTopic returns successful response with topic arn
+		CreateTopicResponse response = this.snsClient.createTopic(builder.build());
+		return Arn.fromString(response.topicArn());
 	}
 
 }

@@ -15,12 +15,16 @@
  */
 package io.awspring.cloud.sns.core;
 
+import static io.awspring.cloud.sns.core.SnsHeaders.*;
 import static io.awspring.cloud.sns.core.SnsHeaders.NOTIFICATION_SUBJECT_HEADER;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
@@ -122,6 +126,18 @@ public class SnsTemplate extends AbstractMessageSendingTemplate<TopicMessageChan
 		this.convertAndSend(destinationName, message, Collections.singletonMap(NOTIFICATION_SUBJECT_HEADER, subject));
 	}
 
+	public void sendNotification(String destinationName, Object message, @Nullable String subject, @Nullable String groupId, @Nullable String deduplicationId) {
+		final Map<String, Object> headers = new HashMap<>();
+		if (subject != null) headers.put("notification-subject", subject);
+		if (groupId != null) headers.put("message-group-id", groupId);
+		if (deduplicationId != null) headers.put("message-deduplication-id", deduplicationId);
+
+		final Map<String, Object> immutableHeaders = headers.entrySet()
+			.stream()
+			.collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+		this.convertAndSend(destinationName, message, immutableHeaders);
+	}
+
 	/**
 	 * Convenience method that sends a notification with the given {@literal message} and {@literal subject} to the
 	 * {@literal destination}. The {@literal subject} is sent as header as defined in the
@@ -171,5 +187,27 @@ public class SnsTemplate extends AbstractMessageSendingTemplate<TopicMessageChan
 		}
 
 		return new CompositeMessageConverter(converters);
+	}
+
+
+	private SnsNotificationRequest extractSnsNotificationRequest(Object message) {
+		Class<?> clazz = message.getClass(); // 객체의 클래스 정보를 얻음
+		while (clazz != null) { // 상위 클래스까지 포함하여 검사
+			Field[] fields = clazz.getDeclaredFields(); // 해당 클래스의 모든 필드를 얻음
+			for (Field field : fields) {
+				if (SnsNotificationRequest.class.isAssignableFrom(field.getType())) {
+					field.setAccessible(true); // private 필드 접근을 위해 접근 가능하도록 설정
+					try {
+						return (SnsNotificationRequest) field.get(message); // 필드의 값을 가져옴
+					} catch (IllegalAccessException e) {
+						e.printStackTrace();
+					} finally {
+						field.setAccessible(false); // 접근성 설정을 원래대로 되돌림
+					}
+				}
+			}
+			clazz = clazz.getSuperclass(); // 상위 클래스로 이동
+		}
+		return null; // 해당 타입의 필드가 없으면 null 반환
 	}
 }

@@ -165,4 +165,15 @@ class SnsTemplateTest {
 		verify(interceptor).preSend(any(), any());
 		verify(interceptor).postSend(any(), any(), anyBoolean());
 	}
+
+//	@Test
+//	void test() {
+//		// given
+//		snsTemplate = new SnsTemplate(snsClient);
+//
+//		// when
+//		snsTemplate.sendNotification("arn:aws:sns:eu-west:123456789012:test.fifo", SnsNotification.of(new Person("seongju")));
+//
+//		// then
+//	}
 }

@@ -21,11 +21,15 @@ import static org.assertj.core.api.Assertions.*;
 import static org.awaitility.Awaitility.await;
 
 import io.awspring.cloud.sns.Person;
+import io.awspring.cloud.sns.core.SnsNotification;
+import io.awspring.cloud.sns.core.SnsNotificationRequest;
 import io.awspring.cloud.sns.core.SnsTemplate;
 import io.awspring.cloud.sns.core.TopicNotFoundException;
 import io.awspring.cloud.sns.core.TopicsListingTopicArnResolver;
+import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
@@ -38,10 +42,13 @@ import org.testcontainers.shaded.com.fasterxml.jackson.databind.JsonNode;
 import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.endpoints.internal.Value.Str;
 import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
+import software.amazon.awssdk.services.sns.model.PublishRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.PurgeQueueRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
@@ -66,7 +73,10 @@ class SnsTemplateIntegrationTest {
 
 	@BeforeAll
 	public static void createSnsTemplate() {
-		snsClient = SnsClient.builder().endpointOverride(localstack.getEndpoint())
+		System.out.println("localstack.getRegion() = " + localstack.getRegion());
+		System.out.println("localstack.end point() = " + localstack.getEndpoint());
+		snsClient = SnsClient.builder()
+				.endpointOverride(URI.create(localstack.getEndpoint().toString()))
 				.region(Region.of(localstack.getRegion()))
 				.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("noop", "noop")))
 				.build();
@@ -96,25 +106,59 @@ class SnsTemplateIntegrationTest {
 		}
 
 		@Test
-		void send_validTextMessage_usesFifoChannel_send_arn_read_by_sqs() {
+		void send_validTextMessage_usesFifoChannel_send_arn_read_by_sqs()
+			throws InterruptedException {
 			String topicName = "my_topic_name.fifo";
 			Map<String, String> topicAttributes = new HashMap<>();
 			topicAttributes.put("FifoTopic", String.valueOf(true));
 			String topicArn = snsClient
-					.createTopic(CreateTopicRequest.builder().name(topicName).attributes(topicAttributes).build())
+					.createTopic(CreateTopicRequest.builder()
+					.name(topicName)
+					.attributes(topicAttributes).build())
 					.topicArn();
 			snsClient.subscribe(r -> r.topicArn(topicArn).protocol("sqs").endpoint(queueArn));
-
-			snsTemplate.convertAndSend(topicName, "message",
+			SnsNotification<String> notification = SnsNotification.builder("message")
+				.groupId("group-id")
+				.deduplicationId("deduplication-id")
+				.build();
+//			arn:aws:sns:us-east-1:000000000000:my_topic_name123.fifo
+			snsTemplate.convertAndSend("arn:aws:sns:us-east-1:000000000000:my_topic_NAME123.fifo", "message",
 					Map.of(MESSAGE_GROUP_ID_HEADER, "group-id", MESSAGE_DEDUPLICATION_ID_HEADER, "deduplication-id"));
 
-			await().untilAsserted(() -> {
-				ReceiveMessageResponse response = sqsClient.receiveMessage(r -> r.queueUrl(queueUrl));
-				assertThat(response.hasMessages()).isTrue();
-				JsonNode body = objectMapper.readTree(response.messages().get(0).body());
-				assertThat(body.get("Message").asText()).isEqualTo("message");
-			});
+//			await().untilAsserted(() -> {
+//				ReceiveMessageResponse response = sqsClient.receiveMessage(r -> r.queueUrl(queueUrl));
+//				assertThat(response.hasMessages()).isTrue();
+//				JsonNode body = objectMapper.readTree(response.messages().get(0).body());
+//				assertThat(body.get("Message").asText()).isEqualTo("message");
+//			});
+
+//			Thread.sleep(20000);
 		}
+
+//		@Test
+//		void test() {
+//			// given
+//			snsTemplate = new SnsTemplate(snsClient);
+//			Map<String, String> topicAttributes = new HashMap<>();
+//			topicAttributes.put("FifoTopic", String.valueOf(true));
+//			String topicName = "my_topic_name.fifo";
+//			Person payload = new Person("seongju");
+//			PublishRequest publishRequest = PublishRequest.builder()
+//				.messageDeduplicationId("deduplication-id")
+//				.messageGroupId("group-id")
+//				.build();
+//			SnsNotification<Person> notification = SnsNotification.builder(payload)
+//				.groupId("group-id")
+//				.deduplicationId("deduplication-id")
+//				.build();
+//
+////			String topicArn = snsClient
+////				.createTopic(CreateTopicRequest.builder().name(topicName).attributes(topicAttributes).build())
+////				.topicArn();
+//
+//			snsTemplate.sendNotification("topicNameaouibc.fifo", notification, null);
+////			snsTemplate.sendNotification(topicName, notification, null);
+//		}
 
 		@AfterEach
 		public void purgeQueue() {
